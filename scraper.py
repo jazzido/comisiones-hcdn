@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 
 TRAMITE_RE = re.compile('background-color:#(E6F1FF|EFEFEF)')
 LINK_RE = re.compile("javascript:OpenWindow\('([^']+)',700,400\)")
+TIPO_RE = re.compile("\d+ - ([^:]+)")
 
 def scrape(fname):
     with open(fname) as f:
@@ -27,31 +28,38 @@ def scrape(fname):
           and tag.name != 'hr':
 
             if 'class' in tag.attrs and 'tituloItem' in tag['class']:
-                tramite_tipo = tag.string
+                tramite_tipo = re.search(TIPO_RE, tag.string).group(1)
             elif 'style' in tag.attrs and re.search(TRAMITE_RE, tag['style']):
                 desc = tag.find('div')
-                if desc is None:
+
+                if desc is None and tramite_tipo != 'VARIOS':
                     tag = tag.next_sibling
                     continue
-
-                expedientes = [
-                    {
-                        'expediente': a.string,
-                        'link': re.search(LINK_RE, a['href']).group(1)
-                    } for a in desc.find_all('a')
-                ]
+                else:
+                    desc = tag
 
                 reunion['tramites'].append({
                     'tipo': tramite_tipo,
-                    'descripcion': ' '.join(desc.stripped_strings),
-                    'expedientes': expedientes
+                    'descripcion': ''.join(desc.strings),
+                    'expediente': desc.find('a').string if desc.find('a') else None,
+                    '_color': re.search(TRAMITE_RE, tag['style']).group(1)
                 })
             elif 'style' in tag.attrs and tag['style'] == 'text-align:center;font-weight:bold':
                 if len(reunion['tramites']) > 0:
-                    reunion['tramites'][-1]['resultado'] = tag.string
+                    # esto es porque un 'resultado de votacion' a veces se aplica
+                    # a un conjunto de dictamenes
+                    # (aparecen con el mismo color)
+                    k = None
+                    for t in reversed(reunion['tramites']):
+                        if k is None or k == t['_color'] + t['tipo']:
+                            t['votacion'] = tag.string
+                            k = t['_color'] + t['tipo']
+                        else:
+                            break
 
             tag = tag.next_sibling
 
+        for t in reunion['tramites']: del t['_color']
         reuniones.append(reunion)
 
     return reuniones
