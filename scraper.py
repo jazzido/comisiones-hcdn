@@ -1,4 +1,4 @@
-import sys, re
+import sys, re, json
 from pprint import pprint
 from datetime import datetime
 
@@ -65,5 +65,8 @@ def scrape(fname):
     return reuniones
 
 if __name__ == '__main__':
-    pprint(scrape(sys.argv[1]))
-    #scrape(sys.argv[1])
+    dthandler = lambda obj: (
+        obj.isoformat()
+        if isinstance(obj, datetime)
+        else None)
+    print json.dumps(scrape(sys.argv[1]), default=dthandler)
